@@ -1,0 +1,49 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "jsx": "react-native",
+    "strict": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": [
+      "react",
+      "react-native"
+    ],
+    "baseUrl": "./src",
+    "paths": {
+      "@navigation/*": [
+        "navigation/*"
+      ],
+      "@context/*": [
+        "context/*"
+      ],
+      "@screens/*": [
+        "screens/*"
+      ],
+      "@components/*": [
+        "components/*"
+      ],
+      "@services/*": [
+        "services/*"
+      ],
+      "@hooks/*": [
+        "hooks/*"
+      ],
+      "@utils/*": [
+        "utils/*"
+      ],
+      "@theme/*": [
+        "theme/*"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "index.tsx"
+  ],
+  "extends": "expo/tsconfig.base"
+}
