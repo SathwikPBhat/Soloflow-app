@@ -22,17 +22,60 @@ export default function InvoicePage({ route, navigation }) {
   const [isSending, setIsSending] = useState(false);
   const [token, setToken] = useState(null);
 
+  const normalizeAmount = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const rawInvoiceItems = Array.isArray(invoiceData?.particulars)
+    ? invoiceData.particulars
+    : Array.isArray(invoiceData?.invoice_tasks)
+    ? invoiceData.invoice_tasks
+    : Array.isArray(invoiceData?.tasks)
+    ? invoiceData.tasks
+    : [];
+
+  const invoiceItems = rawInvoiceItems.map((item) => ({
+    task_name: item?.task_name || item?.name || item?.task_id?.task_name || 'Task',
+    task_description:
+      item?.task_description || item?.description || item?.task_id?.task_description || '',
+    task_amount: normalizeAmount(
+      item?.task_amount ?? item?.task_price ?? item?.amount ?? item?.task_id?.task_price
+    ),
+  }));
+
+  const backendInvoiceTotal = normalizeAmount(
+    invoiceData?.invoice_amount ?? invoiceData?.invoice_total_amount
+  );
+  const calculatedInvoiceTotal = invoiceItems.reduce(
+    (sum, task) => sum + normalizeAmount(task.task_amount),
+    0
+  );
+  const invoiceTotal = invoiceItems.length > 0 ? calculatedInvoiceTotal : backendInvoiceTotal;
+
+  const normalizedStatus = String(invoiceData?.invoice_status || 'Pending').toLowerCase();
+
   useEffect(() => {
     storage.getItem('token').then(setToken);
   }, []);
 
   useEffect(() => {
     if (!token) return;
-    fetch(`${API_BASE_URL}/${user_id}/${client_id}/${project_id}/viewinvoice`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
+    const loadInvoice = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/${user_id}/${client_id}/${project_id}/viewinvoice`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to load invoice');
+        }
+
         if (data.invoices && Array.isArray(data.invoices) && data.invoices.length > 0) {
           setInvoiceData(data.invoices[0]);
         } else if (data.invoice) {
@@ -40,10 +83,17 @@ export default function InvoicePage({ route, navigation }) {
         } else {
           setInvoiceData(data);
         }
+
         Toast.show({ type: 'success', text1: 'Invoice loaded' });
-      })
-      .catch(() => Toast.show({ type: 'error', text1: 'Failed to load invoice' }))
-      .finally(() => setLoading(false));
+      } catch (error) {
+        setInvoiceData(null);
+        Toast.show({ type: 'error', text1: error.message || 'Failed to load invoice' });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInvoice();
   }, [token, user_id, client_id, project_id]);
 
   const handleSendInvoice = async () => {
@@ -153,7 +203,7 @@ export default function InvoicePage({ route, navigation }) {
               <Text style={[styles.tableHeaderText, { color: subText, flex: 2 }]}>Task</Text>
               <Text style={[styles.tableHeaderText, { color: subText, flex: 1, textAlign: 'right' }]}>Amount</Text>
             </View>
-            {(invoiceData?.invoice_tasks || []).map((task, idx) => (
+            {invoiceItems.map((task, idx) => (
               <View
                 key={idx}
                 style={[
@@ -172,7 +222,7 @@ export default function InvoicePage({ route, navigation }) {
                   )}
                 </View>
                 <Text style={[styles.taskPrice, { color: textColor }]}>
-                  ${(task.task_price || 0).toLocaleString()}
+                  ${normalizeAmount(task.task_amount).toFixed(2)}
                 </Text>
               </View>
             ))}
@@ -181,7 +231,7 @@ export default function InvoicePage({ route, navigation }) {
             <View style={[styles.totalRow, { borderTopColor: borderColor }]}>
               <Text style={[styles.totalLabel, { color: subText }]}>TOTAL</Text>
               <Text style={[styles.totalAmount, { color: darkMode ? '#60a5fa' : '#2563eb' }]}>
-                ${(invoiceData?.invoice_total_amount || 0).toLocaleString()}
+                ${invoiceTotal.toFixed(2)}
               </Text>
             </View>
           </View>
@@ -193,9 +243,11 @@ export default function InvoicePage({ route, navigation }) {
                 styles.statusBadge,
                 {
                   backgroundColor:
-                    invoiceData?.invoice_status === 'paid'
+                    normalizedStatus === 'paid'
                       ? '#dcfce7'
-                      : invoiceData?.invoice_status === 'sent'
+                      : normalizedStatus === 'overdue'
+                      ? '#fee2e2'
+                      : normalizedStatus === 'pending'
                       ? '#dbeafe'
                       : '#fef9c3',
                 },
@@ -204,9 +256,11 @@ export default function InvoicePage({ route, navigation }) {
               <Text
                 style={{
                   color:
-                    invoiceData?.invoice_status === 'paid'
+                    normalizedStatus === 'paid'
                       ? '#15803d'
-                      : invoiceData?.invoice_status === 'sent'
+                      : normalizedStatus === 'overdue'
+                      ? '#b91c1c'
+                      : normalizedStatus === 'pending'
                       ? '#1d4ed8'
                       : '#854d0e',
                   fontWeight: '600',
@@ -214,7 +268,7 @@ export default function InvoicePage({ route, navigation }) {
                   textTransform: 'capitalize',
                 }}
               >
-                {invoiceData?.invoice_status || 'pending'}
+                {normalizedStatus}
               </Text>
             </View>
           </View>

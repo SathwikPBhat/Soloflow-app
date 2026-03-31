@@ -1,23 +1,23 @@
 // ...existing code...
 import { Feather } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  FlatList,
-  useWindowDimensions,
+    ActivityIndicator,
+    FlatList,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import AppHeader from '../components/AppHeader';
-import { API_BASE_URL } from '../utils/config';
 import { useTheme } from '../contexts/ThemeContext';
+import { API_BASE_URL } from '../utils/config';
 import { storage } from '../utils/storage';
 
 const PRIORITY_LABELS = { 1: 'Backlog', 2: 'In Progress', 3: 'To Do', 4: 'Review' };
@@ -268,8 +268,9 @@ export default function Dashboard() {
     if (selectedClient && userId && token) {
       (async () => {
         try {
-          const data = await apiFetch(`${userId}/${selectedClient}/projects`);
-          setProjects(Array.isArray(data) ? data : data?.projects || []);
+          const data = await apiFetch(`${userId}/${selectedClient}/projectdropdown`);
+          const availableProjects = Array.isArray(data) ? data : data?.projects || [];
+          setProjects(availableProjects.filter((project) => project?.status !== true));
         } catch {
           setProjects([]);
         }
