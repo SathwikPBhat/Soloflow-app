@@ -13,7 +13,6 @@ import {
   View,
   FlatList,
   useWindowDimensions,
-  Platform,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import AppHeader from '../components/AppHeader';
@@ -213,7 +212,9 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const data = await apiFetch(`${userId}/dashboard`);
-      const tasks = Array.isArray(data) ? data : data?.tasks || [];
+      const tasks = Array.isArray(data)
+        ? data
+        : data?.tasks || data?.task || data?.data?.tasks || [];
 
       const newBoards = {
         backlog: { ...BOARDS[0], tasks: [] },
@@ -223,11 +224,14 @@ export default function Dashboard() {
       };
 
       tasks.forEach((task) => {
-        const p = task.task_priority;
-        if (p === 1) newBoards.backlog.tasks.push(task);
+        const isCompleted = Boolean(task?.task_status);
+        const p = Number(task?.task_priority);
+        if (isCompleted) newBoards.review.tasks.push(task);
+        else if (p === 1) newBoards.backlog.tasks.push(task);
         else if (p === 3) newBoards.todo.tasks.push(task);
         else if (p === 2) newBoards.inprogress.tasks.push(task);
-        else if (p === 4) newBoards.review.tasks.push(task);
+        else if (p === 4) newBoards.review.tasks.push(task); // legacy fallback
+        else newBoards.backlog.tasks.push(task);
       });
       setBoards(newBoards);
     } catch (err) {
@@ -285,8 +289,48 @@ export default function Dashboard() {
     setMoveModalVisible(false);
     const targetBoard = BOARDS.find((b) => b.id === targetBoardId);
     if (!targetBoard) return;
+    const taskId = taskToMove._id || taskToMove.id;
+    const isCompletedTask = Boolean(taskToMove.task_status);
+    if (!taskId) {
+      Toast.show({ type: 'error', text1: 'Failed to move task', text2: 'Task id is missing' });
+      setTaskToMove(null);
+      return;
+    }
+    if (targetBoardId === 'review') {
+      try {
+        if (!isCompletedTask) {
+          await apiFetch(`${userId}/${taskId}/status`, {
+            method: 'PATCH',
+          });
+        }
+
+        setCurrentTask({ ...taskToMove, _id: taskId, task_status: true });
+        setTaskPrice(String(taskToMove.task_price ?? 0));
+        setPriceModalVisible(true);
+        await fetchTasks();
+      } catch (err) {
+        Toast.show({ type: 'error', text1: 'Failed to move task', text2: err.message });
+      }
+      setTaskToMove(null);
+      return;
+    }
+
+    if (isCompletedTask) {
+      Toast.show({
+        type: 'info',
+        text1: 'Task already completed',
+        text2: 'Completed tasks stay in Review.',
+      });
+      setTaskToMove(null);
+      return;
+    }
+
+    if (Number(taskToMove.task_priority) === targetBoard.priority) {
+      setTaskToMove(null);
+      return;
+    }
     try {
-      await apiFetch(`${userId}/${taskToMove._id}/status`, {
+      await apiFetch(`${userId}/${taskId}/priority`, {
         method: 'PATCH',
         body: { task_priority: targetBoard.priority },
       });
@@ -299,13 +343,25 @@ export default function Dashboard() {
 
   const handlePriceSubmit = async () => {
     if (!currentTask) return;
+    const taskId = currentTask._id || currentTask.id;
+    const parsedPrice = parseFloat(taskPrice);
+    if (!taskId) {
+      Toast.show({ type: 'error', text1: 'Failed to update price', text2: 'Task id is missing' });
+      return;
+    }
+    if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+      Toast.show({ type: 'error', text1: 'Invalid price', text2: 'Price must be a non-negative number.' });
+      return;
+    }
     try {
-      await apiFetch(`${userId}/${currentTask._id}/price`, {
+      await apiFetch(`${userId}/${taskId}/price`, {
         method: 'PATCH',
-        body: { task_price: parseFloat(taskPrice) || 0 },
+        body: { task_price: parsedPrice },
       });
       await fetchTasks();
       setPriceModalVisible(false);
+      setCurrentTask(null);
+      setTaskPrice('');
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Failed to update price', text2: err.message });
     }
@@ -386,7 +442,7 @@ export default function Dashboard() {
           const columnStyle =
             numColumns > 1
               ? { flex: 1, marginHorizontal: 8, marginBottom: 12, minHeight: 180 }
-              : { width: '100%', marginBottom: 12 };
+              : { width: '100%', marginBottom: 12, minHeight: 180 };
 
           return (
             <View
@@ -417,7 +473,7 @@ export default function Dashboard() {
               <View style={styles.tasksContainer}>
                 <FlatList
                   data={board.tasks}
-                  keyExtractor={(t) => t._id}
+                  keyExtractor={(t, index) => String(t._id || t.id || `${board.id}-${index}`)}
                   renderItem={({ item: task }) => (
                     <TaskCard
                       task={task}
@@ -425,12 +481,22 @@ export default function Dashboard() {
                       onMove={handleMoveTask}
                     />
                   )}
-                  nestedScrollEnabled={true}
-                  scrollEnabled={true}
+                  nestedScrollEnabled={false}
+                  scrollEnabled={false}
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={{ paddingBottom: 12 }}
-                  // limit inner list height on large screens to prevent overflowing
-                  style={{ maxHeight: Platform.OS === 'android' ? 520 : undefined }}
+                  ListEmptyComponent={
+                    <View
+                      style={[
+                        styles.emptyBoard,
+                        { borderColor: darkMode ? '#4b5563' : '#d1d5db' },
+                      ]}
+                    >
+                      <Text style={{ color: darkMode ? '#9ca3af' : '#6b7280', fontSize: 12 }}>
+                        No tasks in {board.title.toLowerCase()}
+                      </Text>
+                    </View>
+                  }
                 />
               </View>
             </View>
@@ -511,7 +577,11 @@ export default function Dashboard() {
             />
             <View style={styles.modalBtns}>
               <TouchableOpacity
-                onPress={() => setPriceModalVisible(false)}
+                onPress={() => {
+                  setPriceModalVisible(false);
+                  setCurrentTask(null);
+                  setTaskPrice('');
+                }}
                 style={[
                   styles.modalCancelBtn,
                   { backgroundColor: darkMode ? '#374151' : '#f3f4f6' },
@@ -784,7 +854,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
-    maxHeight: 720,
+    minHeight: 180,
   },
   boardHeader: {
     flexDirection: 'row',
@@ -796,7 +866,7 @@ const styles = StyleSheet.create({
   boardDot: { width: 12, height: 12, borderRadius: 6 },
   boardTitle: { flex: 1, fontWeight: '600', fontSize: 15 },
   countBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
-  tasksContainer: { padding: 10, flex: 1 },
+  tasksContainer: { padding: 10 },
   emptyBoard: {
     height: 80,
     borderWidth: 2,
