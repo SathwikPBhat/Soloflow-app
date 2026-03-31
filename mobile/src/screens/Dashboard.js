@@ -270,7 +270,11 @@ export default function Dashboard() {
         try {
           const data = await apiFetch(`${userId}/${selectedClient}/projectdropdown`);
           const availableProjects = Array.isArray(data) ? data : data?.projects || [];
-          setProjects(availableProjects.filter((project) => project?.status !== true));
+          setProjects(
+            availableProjects.filter(
+              (project) => project?.status !== true && project?.invoiceGenerated !== true
+            )
+          );
         } catch {
           setProjects([]);
         }

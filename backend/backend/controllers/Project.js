@@ -226,7 +226,7 @@ async function getProjectByClientDropDown(req,res){
     }
 
    const formattedProjects = projects
-  .filter(project => project.project_status === false)
+  .filter(project => project.project_status === false && project.project_invoice_generated !== true)
   .map(project => ({
     id: project._id,
     projectName: project.project_name,

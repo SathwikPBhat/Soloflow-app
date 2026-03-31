@@ -28,18 +28,11 @@ Notification routes from the backend are intentionally **not** used.
 
 ## Environment
 
-Copy `.env.example` to `.env` and set your backend URL:
+The app is configured to use localhost only:
 
-```bash
-cd SoloFlow/mobile
-cp .env.example .env
-```
+- `http://localhost:3000`
 
-Edit `.env`:
-
-```bash
-EXPO_PUBLIC_API_URL=http://YOUR_BACKEND_HOST:3000
-```
+This is defined in `src/utils/config.js`.
 
 ## Installation
 
@@ -67,7 +60,7 @@ Then:
 - Press `i` to run on iOS simulator
 - Or scan the QR code with Expo Go
 
-Ensure your SoloFlow backend is running and reachable at `EXPO_PUBLIC_API_URL`.
+Ensure your SoloFlow backend is running at `http://localhost:3000`.
 
 ## Architecture Overview
 

@@ -30,6 +30,15 @@ async function addTask(req, res) {
             return res.status(400).json({ message: "Task priority must be between 1 (highest) and 4 (lowest)" });
         }
 
+        const project = await Project.findById(project_id);
+        if (!project) {
+            return res.status(404).json({ message: "Project not found" });
+        }
+
+        if (project.project_invoice_generated) {
+            return res.status(400).json({ message: "Cannot add tasks after invoice is generated for this project" });
+        }
+
         // Create and save task
         const newTask = new Task({
             task_name,
@@ -49,13 +58,11 @@ async function addTask(req, res) {
             return res.status(500).json({ message: "Error saving task" });
         }
 
-        // Add task to project if project exists
-        const project = await Project.findById(project_id);
-        if (project) {
-            
-            project.project_tasks.push(savedTask._id);
-            await project.save();
-        }
+        // Add task to project.
+        project.project_tasks.push(savedTask._id);
+        // Any newly added task means the project is no longer fully completed.
+        project.project_status = false;
+        await project.save();
 
         return res.status(201).json({
             message: "Task added successfully",
